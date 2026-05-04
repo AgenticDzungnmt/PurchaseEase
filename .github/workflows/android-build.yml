@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build:
     name: Build Android APK
@@ -15,14 +19,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          path: source
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          # No cache — project has no package-lock.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -30,38 +31,32 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install React Native CLI
-        run: npm install -g @react-native-community/cli@13
-
-      - name: Scaffold new React Native project
+      - name: Install Android SDK platform & build tools
         run: |
-          npx @react-native-community/cli@13 init PurchaseEase \
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            --sdk_root=$ANDROID_HOME || true
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Copy appConfig
+        run: cp src/config/appConfig.example.ts src/config/appConfig.ts
+
+      - name: Scaffold Android project
+        run: |
+          # Generate android/ directory using the installed react-native CLI
+          npx react-native@0.74.5 init PurchaseEaseTemp \
             --version 0.74.5 \
             --skip-git-init \
             --skip-install \
-            --directory app
+            --directory /tmp/rntemp
+          # Copy the generated android/ into our project
+          cp -r /tmp/rntemp/android ./android
 
-      - name: Copy source files over scaffolded project
-        run: |
-          # Overwrite src/ with our code
-          rm -rf app/src
-          cp -r source/src app/src
-
-          # Overwrite config files
-          cp source/package.json app/package.json
-          cp source/tsconfig.json app/tsconfig.json
-          cp source/babel.config.js app/babel.config.js
-          cp source/index.js app/index.js
-          cp source/app.json app/app.json
-
-          # Create appConfig from example
-          cp source/src/config/appConfig.example.ts app/src/config/appConfig.ts
-
-      - name: Install npm dependencies
-        working-directory: app
+      - name: Re-run npm install with android folder present
         run: npm install
 
       - name: Cache Gradle
@@ -70,19 +65,34 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Grant Gradle execute permission
-        run: chmod +x app/android/gradlew
+      - name: Make Gradle executable
+        run: chmod +x android/gradlew
 
       - name: Build debug APK
-        working-directory: app/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          cd android
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            -PANDROID_HOME=$ANDROID_HOME \
+            2>&1 | tee /tmp/gradle-build.log
+          echo "Exit code: $?"
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: PurchaseEase-debug-apk
-          path: app/android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+
+      - name: Upload build log on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gradle-build-log
+          path: /tmp/gradle-build.log
+          retention-days: 3
