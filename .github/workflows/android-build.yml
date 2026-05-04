@@ -15,12 +15,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          path: source
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          # No cache — project has no package-lock.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -31,11 +33,36 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install npm dependencies
-        run: npm ci
+      - name: Install React Native CLI
+        run: npm install -g @react-native-community/cli@13
 
-      - name: Copy appConfig
-        run: cp src/config/appConfig.example.ts src/config/appConfig.ts
+      - name: Scaffold new React Native project
+        run: |
+          npx @react-native-community/cli@13 init PurchaseEase \
+            --version 0.74.5 \
+            --skip-git-init \
+            --skip-install \
+            --directory app
+
+      - name: Copy source files over scaffolded project
+        run: |
+          # Overwrite src/ with our code
+          rm -rf app/src
+          cp -r source/src app/src
+
+          # Overwrite config files
+          cp source/package.json app/package.json
+          cp source/tsconfig.json app/tsconfig.json
+          cp source/babel.config.js app/babel.config.js
+          cp source/index.js app/index.js
+          cp source/app.json app/app.json
+
+          # Create appConfig from example
+          cp source/src/config/appConfig.example.ts app/src/config/appConfig.ts
+
+      - name: Install npm dependencies
+        working-directory: app
+        run: npm install
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -43,19 +70,19 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: gradle-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
       - name: Grant Gradle execute permission
-        run: chmod +x android/gradlew
+        run: chmod +x app/android/gradlew
 
       - name: Build debug APK
-        working-directory: android
+        working-directory: app/android
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: PurchaseEase-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: app/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
