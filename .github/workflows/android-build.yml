@@ -15,12 +15,13 @@ jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -31,13 +32,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install Android SDK platform & build tools
+      - name: Install Android SDK components
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
-            --sdk_root=$ANDROID_HOME || true
+            --sdk_root=$ANDROID_HOME 2>&1 | tail -5 || true
 
       - name: Install npm dependencies
         run: npm install
@@ -45,19 +45,54 @@ jobs:
       - name: Copy appConfig
         run: cp src/config/appConfig.example.ts src/config/appConfig.ts
 
-      - name: Scaffold Android project
+      - name: Set up Android directory from RN template
         run: |
-          # Generate android/ directory using the installed react-native CLI
-          npx react-native@0.74.5 init PurchaseEaseTemp \
-            --version 0.74.5 \
-            --skip-git-init \
-            --skip-install \
-            --directory /tmp/rntemp
-          # Copy the generated android/ into our project
-          cp -r /tmp/rntemp/android ./android
+          # Install @react-native/template@0.74.5 to a temp location (avoids slow full init)
+          cd /tmp
+          npm install --no-save @react-native/template@0.74.5
 
-      - name: Re-run npm install with android folder present
-        run: npm install
+          TEMPLATE="/tmp/node_modules/@react-native/template"
+          echo "=== Template contents ==="
+          ls "$TEMPLATE/"
+
+          # Copy android from template into workspace
+          cp -r "$TEMPLATE/android" "$GITHUB_WORKSPACE/android"
+
+          # Rename Java/Kotlin package directories
+          SRC="$GITHUB_WORKSPACE/android/app/src/main/java/com"
+          if [ -d "$SRC/helloworld" ]; then
+            mkdir -p "$SRC/purchaseease"
+            mv "$SRC/helloworld"/* "$SRC/purchaseease"/
+            rm -rf "$SRC/helloworld"
+          fi
+
+          # Replace HelloWorld / com.helloworld placeholders in all text files
+          cd "$GITHUB_WORKSPACE"
+          find android -type f \( \
+            -name "*.gradle" -o -name "*.gradle.kts" -o \
+            -name "*.xml" -o -name "*.kt" -o -name "*.java" -o \
+            -name "*.properties" -o -name "*.pro" \
+          \) | while IFS= read -r f; do
+            sed -i \
+              -e 's/HelloWorld/PurchaseEase/g' \
+              -e 's/com\.helloworld/com.purchaseease/g' \
+              -e 's/helloworld/purchaseease/g' \
+              "$f"
+          done
+
+          # Use NDK version pre-installed on the GitHub Actions ubuntu runner
+          # (26.1.10909125 is the template default, 26.3.11579264 is what's available)
+          sed -i 's/ndkVersion = "26.1.10909125"/ndkVersion = "26.3.11579264"/' android/build.gradle
+
+          chmod +x android/gradlew
+
+          echo "=== NDK version in build.gradle ==="
+          grep ndkVersion android/build.gradle || true
+          echo "=== Application ID ==="
+          grep applicationId android/app/build.gradle || true
+
+      - name: Write local.properties
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -68,18 +103,15 @@ jobs:
           key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Make Gradle executable
-        run: chmod +x android/gradlew
-
       - name: Build debug APK
+        shell: bash
         run: |
+          set -o pipefail
           cd android
           ./gradlew assembleDebug \
             --no-daemon \
             --stacktrace \
-            -PANDROID_HOME=$ANDROID_HOME \
             2>&1 | tee /tmp/gradle-build.log
-          echo "Exit code: $?"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -87,11 +119,11 @@ jobs:
         with:
           name: PurchaseEase-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          retention-days: 14
 
-      - name: Upload build log on failure
+      - name: Upload build log
         uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: gradle-build-log
           path: /tmp/gradle-build.log
