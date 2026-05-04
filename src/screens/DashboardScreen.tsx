@@ -11,11 +11,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { getPurchaseOrders } from '../services/bcApi';
-import { PurchaseOrder, DashboardStackParamList } from '../types';
+import { PurchaseOrder, DashboardStackParamList, MainTabParamList } from '../types';
 import { colors, spacing, borderRadius, shadows } from '../theme';
 
 type DashboardNav = NativeStackNavigationProp<DashboardStackParamList>;
+type TabNav = BottomTabNavigationProp<MainTabParamList>;
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -33,6 +35,7 @@ function getStatusColor(status: string): string {
 
 export function DashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<DashboardNav>();
+  const tabNavigation = useNavigation<TabNav>();
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,30 +83,25 @@ export function DashboardScreen(): React.JSX.Element {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Welcome header */}
         <View style={styles.welcomeRow}>
           <Text style={styles.welcomeText}>Good day 👋</Text>
-          <Text style={styles.welcomeSub}>Purchase Order Dashboard</Text>
         </View>
 
-        {/* Summary cards */}
-        <View style={styles.cardsGrid}>
+        <View style={styles.summaryGrid}>
           <SummaryCard label="Open Orders" value={String(totalOpen)} color={colors.statusOpen} />
           <SummaryCard label="This Month" value={String(ordersThisMonth)} color={colors.primary} />
           <SummaryCard label="Pending Receipt" value={String(pendingReceipt)} color={colors.statusInReview} />
-          <SummaryCard label="Open Amount" value={formatCurrency(totalAmount)} color={colors.statusReceived} small />
+          <SummaryCard label="Total Amount" value={formatCurrency(totalAmount)} color={colors.statusReceived} small />
         </View>
 
-        {/* Quick actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
-          <QuickAction icon="+" label="New Order" onPress={() => navigation.navigate('CreateOrder')} />
-          <QuickAction icon="📷" label="Scan Doc" onPress={() => {}} />
-          <QuickAction icon="📄" label="All Orders" onPress={() => {}} />
-          <QuickAction icon="🧭" label="Invoices" onPress={() => {}} />
+        <View style={styles.quickActions}>
+          <QuickAction icon="📝" label="New Order" onPress={() => navigation.navigate('CreateOrder')} />
+          <QuickAction icon="📷" label="Scan Doc" onPress={() => tabNavigation.navigate('CreateTab')} />
+          <QuickAction icon="📄" label="All Orders" onPress={() => tabNavigation.navigate('OrdersTab')} />
+          <QuickAction icon="🧾" label="Invoices" onPress={() => tabNavigation.navigate('InvoicesTab')} />
         </View>
 
-        {/* Recent orders */}
         <Text style={styles.sectionTitle}>Recent Orders</Text>
         {recentOrders.length === 0 ? (
           <Text style={styles.emptyText}>No orders yet.</Text>
@@ -136,8 +134,8 @@ export function DashboardScreen(): React.JSX.Element {
 
 function SummaryCard({ label, value, color, small }: { label: string; value: string; color: string; small?: boolean }) {
   return (
-    <View style={[styles.summaryCard, { borderTopColor: color }]}>
-      <Text style={[styles.summaryValue, small && styles.summaryValueSmall]}>{value}</Text>
+    <View style={styles.summaryCard}>
+      <Text style={[styles.summaryValue, small && styles.summaryValueSm, { color }]}>{value}</Text>
       <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
@@ -145,7 +143,7 @@ function SummaryCard({ label, value, color, small }: { label: string; value: str
 
 function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
   return (
-    <TouchableOpacity style={styles.quickAction} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.quickAction} onPress={onPress} activeOpacity={0.75}>
       <Text style={styles.quickActionIcon}>{icon}</Text>
       <Text style={styles.quickActionLabel}>{label}</Text>
     </TouchableOpacity>
@@ -154,34 +152,31 @@ function QuickAction({ icon, label, onPress }: { icon: string; label: string; on
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
   content: { padding: spacing.base, paddingBottom: spacing.xxxl },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  welcomeRow: { marginBottom: spacing.lg },
-  welcomeText: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
-  welcomeSub: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
-  cardsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -spacing.xs, marginBottom: spacing.lg },
+  welcomeRow: { marginBottom: spacing.base },
+  welcomeText: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.base },
   summaryCard: {
-    width: '46%',
-    margin: '2%',
+    flex: 1,
+    minWidth: '45%',
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    borderTopWidth: 4,
     ...shadows.card,
   },
-  summaryValue: { fontSize: 24, fontWeight: '800', color: colors.textPrimary },
-  summaryValueSmall: { fontSize: 16 },
-  summaryLabel: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.sm, marginTop: spacing.xs },
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.lg },
+  summaryValue: { fontSize: 22, fontWeight: '800', marginBottom: 2 },
+  summaryValueSm: { fontSize: 16 },
+  summaryLabel: { fontSize: 12, color: colors.textSecondary },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: spacing.sm, marginTop: spacing.xs },
+  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.base },
   quickAction: {
     flex: 1,
     backgroundColor: colors.white,
     borderRadius: borderRadius.md,
     padding: spacing.sm,
     alignItems: 'center',
-    marginHorizontal: 4,
     ...shadows.card,
   },
   quickActionIcon: { fontSize: 22, marginBottom: 4 },

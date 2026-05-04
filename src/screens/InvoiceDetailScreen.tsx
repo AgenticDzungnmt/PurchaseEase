@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { getPurchaseInvoices } from '../services/bcApi';
 import { PurchaseInvoice, InvoicesStackParamList } from '../types';
 import { colors, spacing, borderRadius, shadows } from '../theme';
@@ -53,15 +53,15 @@ export function InvoiceDetailScreen(): React.JSX.Element {
     return <View style={styles.centered}><Text>Invoice not found.</Text></View>;
   }
 
+  const statusColor = invoice.status === 'Posted' ? colors.statusPosted : colors.statusDraft;
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Status banner */}
-        <View style={styles.statusBanner}>
-          <Text style={styles.statusText}>{invoice.status}</Text>
+        <View style={[styles.statusBanner, { backgroundColor: statusColor + '20' }]}>
+          <Text style={[styles.statusText, { color: statusColor }]}>{invoice.status}</Text>
         </View>
 
-        {/* Main card */}
         <View style={styles.card}>
           <Text style={styles.invoiceNumber}>{invoice.number}</Text>
           <Text style={styles.vendorName}>{invoice.vendorName}</Text>
@@ -78,10 +78,6 @@ export function InvoiceDetailScreen(): React.JSX.Element {
             <Text style={styles.totalValue}>{formatCurrency(invoice.totalAmountIncludingTax)}</Text>
           </View>
         </View>
-
-        <View style={styles.readOnlyNote}>
-          <Text style={styles.readOnlyText}>🔒 This is a posted invoice — read only.</Text>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -91,18 +87,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: spacing.base, paddingBottom: spacing.xxxl },
-  statusBanner: { backgroundColor: colors.statusPosted + '20', borderRadius: borderRadius.md, padding: spacing.sm, alignItems: 'center', marginBottom: spacing.base },
-  statusText: { color: colors.statusPosted, fontWeight: '700', fontSize: 14 },
+  statusBanner: { borderRadius: borderRadius.md, padding: spacing.md, alignItems: 'center', marginBottom: spacing.base },
+  statusText: { fontSize: 14, fontWeight: '700' },
   card: { backgroundColor: colors.white, borderRadius: borderRadius.md, padding: spacing.base, ...shadows.card },
   invoiceNumber: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
-  vendorName: { fontSize: 16, color: colors.textSecondary, marginBottom: spacing.md },
+  vendorName: { fontSize: 15, fontWeight: '600', color: colors.textSecondary, marginBottom: spacing.sm },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.sm },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   infoLabel: { fontSize: 13, color: colors.textSecondary },
-  infoValue: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
+  infoValue: { fontSize: 13, color: colors.textPrimary, fontWeight: '500' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: spacing.sm },
   totalLabel: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   totalValue: { fontSize: 17, fontWeight: '800', color: colors.primary },
-  readOnlyNote: { backgroundColor: '#FFF3CD', borderRadius: borderRadius.sm, padding: spacing.md, marginTop: spacing.base, borderLeftWidth: 3, borderLeftColor: '#FFC107' },
-  readOnlyText: { fontSize: 13, color: '#856404' },
 });

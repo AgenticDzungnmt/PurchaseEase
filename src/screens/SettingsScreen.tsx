@@ -9,8 +9,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, CommonActions } from '@react-navigation/native';
 import { resetMockData } from '../services/bcApi';
+import { useAuth } from '../context/AuthContext';
 import { UserProfile } from '../types';
 import { appConfig } from '../config/appConfig';
 import { colors, spacing, borderRadius, shadows } from '../theme';
@@ -18,7 +18,7 @@ import { colors, spacing, borderRadius, shadows } from '../theme';
 const APP_VERSION = '1.0.0';
 
 export function SettingsScreen(): React.JSX.Element {
-  const navigation = useNavigation();
+  const { signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -48,31 +48,17 @@ export function SettingsScreen(): React.JSX.Element {
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.removeItem('user_session');
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Auth' }],
-            }),
-          );
-        },
-      },
+      { text: 'Logout', style: 'destructive', onPress: signOut },
     ]);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Demo mode banner */}
         <View style={styles.demoBanner}>
           <Text style={styles.demoBannerText}>🏠 Running in Demo Mode — No live data connection.</Text>
         </View>
 
-        {/* User info */}
         <Text style={styles.sectionTitle}>Profile</Text>
         <View style={styles.card}>
           <View style={styles.avatarRow}>
@@ -89,7 +75,6 @@ export function SettingsScreen(): React.JSX.Element {
           </View>
         </View>
 
-        {/* Data */}
         <Text style={styles.sectionTitle}>Data</Text>
         <View style={styles.card}>
           <TouchableOpacity style={styles.settingsRow} onPress={handleClearData}>
@@ -99,7 +84,6 @@ export function SettingsScreen(): React.JSX.Element {
           <Text style={styles.settingsRowHint}>Resets all in-memory demo data back to original seed values.</Text>
         </View>
 
-        {/* App info */}
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
           <View style={styles.settingsRow}>
@@ -119,7 +103,6 @@ export function SettingsScreen(): React.JSX.Element {
           </Text>
         </View>
 
-        {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutBtnText}>Sign Out</Text>
         </TouchableOpacity>
