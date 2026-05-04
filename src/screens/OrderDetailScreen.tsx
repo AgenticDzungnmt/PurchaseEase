@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp, RouteProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   getPurchaseOrder,
   getPurchaseOrderLines,
@@ -107,6 +108,7 @@ export function OrderDetailScreen(): React.JSX.Element {
             navigation.goBack();
           } catch (e: any) {
             Alert.alert('Error', e.message);
+          } finally {
             setActionLoading(false);
           }
         },
@@ -151,7 +153,6 @@ export function OrderDetailScreen(): React.JSX.Element {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} tintColor={colors.primary} />}
       >
-        {/* Header card */}
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>
             <Text style={styles.orderNumber}>{order.number}</Text>
@@ -173,7 +174,6 @@ export function OrderDetailScreen(): React.JSX.Element {
           </View>
         </View>
 
-        {/* Line items */}
         <Text style={styles.sectionTitle}>Line Items</Text>
         {lines.length === 0 ? (
           <Text style={styles.emptyText}>No line items.</Text>
@@ -194,7 +194,6 @@ export function OrderDetailScreen(): React.JSX.Element {
         )}
       </ScrollView>
 
-      {/* Actions */}
       {actionLoading ? (
         <View style={styles.actionsBar}>
           <ActivityIndicator color={colors.primary} />
