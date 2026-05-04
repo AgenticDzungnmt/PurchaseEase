@@ -34,7 +34,7 @@ jobs:
 
       - name: Install Android SDK components
         run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             --sdk_root=$ANDROID_HOME 2>&1 | tail -5 || true
@@ -45,29 +45,37 @@ jobs:
       - name: Copy appConfig
         run: cp src/config/appConfig.example.ts src/config/appConfig.ts
 
-      - name: Set up Android directory from RN template
+      - name: Extract Android template from react-native release
         run: |
-          # Install @react-native/template@0.74.5 to a temp location (avoids slow full init)
+          echo "=== Downloading react-native 0.74.5 source tarball ==="
           cd /tmp
-          npm install --no-save @react-native/template@0.74.5
+          curl -L -o rn.tar.gz \
+            https://github.com/facebook/react-native/archive/refs/tags/v0.74.5.tar.gz
 
-          TEMPLATE="/tmp/node_modules/@react-native/template"
-          echo "=== Template contents ==="
-          ls "$TEMPLATE/"
+          echo "=== Extracting template/android ==="
+          tar xzf rn.tar.gz \
+            --wildcards \
+            "react-native-0.74.5/template/android/*"
 
-          # Copy android from template into workspace
-          cp -r "$TEMPLATE/android" "$GITHUB_WORKSPACE/android"
+          echo "=== Copying android/ to workspace ==="
+          cp -r react-native-0.74.5/template/android "$GITHUB_WORKSPACE/android"
 
-          # Rename Java/Kotlin package directories
-          SRC="$GITHUB_WORKSPACE/android/app/src/main/java/com"
+          cd "$GITHUB_WORKSPACE"
+
+          echo "=== Renaming package directories ==="
+          SRC="android/app/src/main/java/com"
           if [ -d "$SRC/helloworld" ]; then
             mkdir -p "$SRC/purchaseease"
             mv "$SRC/helloworld"/* "$SRC/purchaseease"/
             rm -rf "$SRC/helloworld"
           fi
+          if [ -d "$SRC/androidhelloworld" ]; then
+            mkdir -p "$SRC/purchaseease"
+            mv "$SRC/androidhelloworld"/* "$SRC/purchaseease"/ 2>/dev/null || true
+            rm -rf "$SRC/androidhelloworld"
+          fi
 
-          # Replace HelloWorld / com.helloworld placeholders in all text files
-          cd "$GITHUB_WORKSPACE"
+          echo "=== Replacing template placeholders ==="
           find android -type f \( \
             -name "*.gradle" -o -name "*.gradle.kts" -o \
             -name "*.xml" -o -name "*.kt" -o -name "*.java" -o \
@@ -80,16 +88,18 @@ jobs:
               "$f"
           done
 
-          # Use NDK version pre-installed on the GitHub Actions ubuntu runner
-          # (26.1.10909125 is the template default, 26.3.11579264 is what's available)
-          sed -i 's/ndkVersion = "26.1.10909125"/ndkVersion = "26.3.11579264"/' android/build.gradle
+          echo "=== Patching NDK version ==="
+          # 26.3.11579264 is pre-installed on ubuntu-latest runners
+          sed -i \
+            's/ndkVersion = "[^"]*"/ndkVersion = "26.3.11579264"/' \
+            android/build.gradle
 
           chmod +x android/gradlew
 
-          echo "=== NDK version in build.gradle ==="
-          grep ndkVersion android/build.gradle || true
-          echo "=== Application ID ==="
-          grep applicationId android/app/build.gradle || true
+          echo "=== Verification ==="
+          grep -r "ndkVersion" android/build.gradle || true
+          grep -r "applicationId" android/app/build.gradle || true
+          find android/app/src/main/java -name "*.kt" -o -name "*.java" | head -10
 
       - name: Write local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
